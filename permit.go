@@ -5,11 +5,16 @@ import (
 	"time"
 )
 
+const (
+	NO_PERMIT uint8 = iota
+	USER_PERMIT
+	DEFAULT_PERMIT
+	PUBLIC_PERMIT
+)
+
 type Permit struct {
-	Username    string
-	Source      func() string `json:"-"`
 	Permissions []*Permission
-	Fetched     int64
+	ValidUntil  int64
 }
 
 func (p Permit) Len() int {
@@ -35,10 +40,9 @@ func (p Permit) Check(ap *AuthPlugger, method, path string, ro bool) bool {
 	return false
 }
 
-func NewPermit(sourceName func() string) *Permit {
+func NewPermit(cacheTime int64) *Permit {
 	return &Permit{
-		Source:  sourceName,
-		Fetched: time.Now().Unix(),
+		ValidUntil: time.Now().Unix() + cacheTime,
 	}
 }
 

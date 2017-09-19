@@ -3,9 +3,7 @@ package authplugger
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync"
-	"time"
 
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
@@ -22,165 +20,160 @@ type AuthPlugger struct {
 
 	ReadParentPath bool
 	RemovePrefix   string
-	CacheTTL       int64
 	Realm          string
 }
 
 // ServeHTTP implements the httpserver.Handler interface.
 func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 
-	var userPermit *Permit
-	var effectivePermit *Permit
+	var username string
+	var userSource string
+
+	var permit *Permit
 
 	var authSuccess bool
 	var err error
 
 	ro := MethodIsRo(r.Method)
 
-	// If GetUserPermit or auth failes, continue
-	// If user does not exist, continue
-	// If user exists, lock to that plug and fail if GetDefaultPermit failes
+	// First get username
 	for _, plug := range plugger.Plugs {
 
-		userPermit, authSuccess, err = plug.GetUserPermit(r)
+		username, authSuccess, err = plug.GetUsername(r)
 		if err != nil {
-			// FIXME: log
-			userPermit = nil
+			fmt.Printf("[authplugger] failed to get username from %s: %s", plug.Name(), err)
+			username = ""
 			continue
 		}
 		if !authSuccess {
-			userPermit = nil
+			username = ""
 			continue
 		}
 
-		fmt.Printf("[debug] [authplugger] [%s] authenticated\n", userPermit.Username)
+		// we got the username, now check permissions
+		userSource = plug.Name()
+		break
 
-		if userPermit.Check(plugger, r.Method, r.RequestURI, ro) {
-			return plugger.Forward(w, r, userPermit, effectivePermit)
-			// return plugger.Next.ServeHTTP(w, r)
-		}
+	}
 
-		effectivePermit, err = plug.GetDefaultPermit()
-		if err != nil {
-			// FIXME: log
-			fmt.Printf("[debug] [authplugger] [%s] failed to get default permit: %s\n", userPermit.Username, err)
-			return Forbidden(w, r, userPermit, effectivePermit)
-		}
+	// Then get user/default permits
+	if username != "" {
 
-		if effectivePermit != nil {
-			if effectivePermit.Check(plugger, r.Method, r.RequestURI, ro) {
-				return plugger.Forward(w, r, userPermit, effectivePermit)
+		for _, plug := range plugger.Plugs {
+
+			permit, err = plug.GetPermit(username)
+			if err != nil {
+				fmt.Printf("[authplugger] failed to get user permit from %s: %s", plug.Name(), err)
+				continue
 			}
+			if permit == nil {
+				continue
+			}
+			if permit.Check(plugger, r.Method, r.RequestURI, ro) {
+				return plugger.Forward(w, r, username, userSource, plug, USER_PERMIT)
+			}
+
+			permit, err = plug.GetDefaultPermit()
+			if err != nil {
+				fmt.Printf("[authplugger] failed to get default permit from %s: %s", plug.Name(), err)
+				continue
+			}
+			if permit != nil {
+				if permit.Check(plugger, r.Method, r.RequestURI, ro) {
+					return plugger.Forward(w, r, username, userSource, plug, DEFAULT_PERMIT)
+				}
+			}
+
 		}
 
 	}
 
-	// If request could not be authenticated in any plug, check all plugs for a public permit.
-	effectivePermit = plugger.GetPublicPermit()
-	if effectivePermit != nil {
-		fmt.Printf("[authplugger] checking public permit\n")
-		if effectivePermit.Check(plugger, r.Method, r.RequestURI, ro) {
-			return plugger.Forward(w, r, userPermit, effectivePermit)
-		}
-	}
-
-	// Redirect to Login Procedure, if available
+	// Lastly, check all public permits
 	for _, plug := range plugger.Plugs {
-		login := plug.LoginResponder()
-		if login != nil {
-			fmt.Printf("[authplugger] redirecting to login (backend: %s)\n", plug.Name())
-			return login(w, r, plugger.Realm)
-		}
-	}
 
-	return Forbidden(w, r, userPermit, effectivePermit)
-}
-
-func (plugger *AuthPlugger) GetPublicPermit() *Permit {
-	// Check Cache
-	plugger.PublicPermitLock.RLock()
-	if plugger.PublicPermitTTL > time.Now().Unix() {
-		defer plugger.PublicPermitLock.RUnlock()
-		return plugger.PublicPermit
-	}
-	plugger.PublicPermitLock.RUnlock()
-
-	// Fetch
-	plugger.PublicPermitLock.Lock()
-	defer plugger.PublicPermitLock.Unlock()
-	// First plug to deliver public permit wins, cache that for CacheTTL
-	for _, plug := range plugger.Plugs {
 		permit, err := plug.GetPublicPermit()
 		if err != nil {
-			// FIXME: log
+			fmt.Printf("[authplugger] failed to get public permit from %s: %s", plug.Name(), err)
 			continue
 		}
-		plugger.PublicPermit = permit
-		break
+		if permit == nil {
+			continue
+		}
+		if permit.Check(plugger, r.Method, r.RequestURI, ro) {
+			return plugger.Forward(w, r, username, userSource, plug, PUBLIC_PERMIT)
+		}
+
 	}
-	return plugger.PublicPermit
+
+	// Execute login procedure, if available
+	if username == "" {
+		for _, plug := range plugger.Plugs {
+			ok, code, err := plug.Login(w, r, plugger.Realm)
+			if ok {
+				return code, err
+			}
+		}
+	}
+
+	return Forbidden(w, r, username, userSource, nil, NO_PERMIT)
 }
 
-func getUserForPrinting(permit *Permit) string {
-	if permit == nil {
+func getUserForPrinting(username, userSource string) string {
+	if username == "" {
 		return ""
 	}
-	return fmt.Sprintf("[%s: %s] ", permit.Source(), permit.Username)
+	return fmt.Sprintf("[%s: %s] ", userSource, username)
 }
 
-func getBackendForPrinting(permit *Permit) string {
-	if permit == nil {
+func getPermitPlugForPrinting(plug Plug, permitType uint8) string {
+	if plug == nil {
 		return ""
 	}
-	switch permit.Username {
-	case "*":
-		return fmt.Sprintf("*%s ", permit.Source())
-	case "!":
-		return fmt.Sprintf("!%s ", permit.Source())
+	switch permitType {
+	case DEFAULT_PERMIT:
+		return fmt.Sprintf("*%s ", plug.Name())
+	case PUBLIC_PERMIT:
+		return fmt.Sprintf("!%s ", plug.Name())
 	default:
-		return fmt.Sprintf("%s ", permit.Source())
+		return fmt.Sprintf("%s ", plug.Name())
 	}
 }
 
-func (plugger *AuthPlugger) Forward(w http.ResponseWriter, r *http.Request, userPermit, effectivePermit *Permit) (int, error) {
+func (plugger *AuthPlugger) Forward(w http.ResponseWriter, r *http.Request, username, userSource string, plug Plug, permitType uint8) (int, error) {
 
 	// log
-	fmt.Printf("[authplugger] %s%sgranted access: %s %s\n", getUserForPrinting(userPermit), getBackendForPrinting(effectivePermit), r.Method, r.RequestURI)
+	printablePermit := getPermitPlugForPrinting(plug, permitType)
+	fmt.Printf("[authplugger] %s%sgranted access: %s %s\n", getUserForPrinting(username, userSource), printablePermit, r.Method, r.RequestURI)
 
 	// set username
-	if userPermit != nil {
-		r.Header.Set("X-AUTHPLUGGER-USER", userPermit.Username)
+	if username != "" {
+		r.Header.Set("Caddy-Auth-User", username)
+		r.Header.Set("Caddy-Auth-Source", userSource)
 	} else {
-		r.Header.Del("X-AUTHPLUGGER-USER")
+		r.Header.Del("Caddy-Auth-User")
+		r.Header.Del("Caddy-Auth-Source")
 	}
 
-	// set chain TODO: which chain? user or effective?
-	// switch effectivePermit.Username {
-	// case "*":
-	// 	r.Header.Set("X-AUTHPLUGGER-CHAIN", "Default")
-	// case "!":
-	// 	r.Header.Set("X-AUTHPLUGGER-CHAIN", "Public")
-	// default:
-	// 	r.Header.Set("X-AUTHPLUGGER-CHAIN", "User")
-	// }
-
-	// set backend TODO: which backend? user or effective?
-	// r.Header.Set("X-AUTHPLUGGER-BACKEND", permit.Source())
+	if printablePermit != "" {
+		r.Header.Set("Caddy-Auth-Permit", printablePermit)
+	} else {
+		r.Header.Del("Caddy-Auth-Permit")
+	}
 
 	return plugger.Next.ServeHTTP(w, r)
 }
 
-func Forbidden(w http.ResponseWriter, r *http.Request, userPermit, effectivePermit *Permit) (int, error) {
+func Forbidden(w http.ResponseWriter, r *http.Request, username, userSource string, plug Plug, permitType uint8) (int, error) {
+
 	// log
-	fmt.Printf("[authplugger] %s%sdenied access: %s %s\n", getUserForPrinting(userPermit), getBackendForPrinting(effectivePermit), r.Method, r.RequestURI)
+	fmt.Printf("[authplugger] %s%sdenied access: %s %s\n", getUserForPrinting(username, userSource), getPermitPlugForPrinting(plug, permitType), r.Method, r.RequestURI)
+
 	return http.StatusForbidden, nil
 }
 
 func NewAuthPlugger(c *caddy.Controller) (*AuthPlugger, error) {
 
-	new := AuthPlugger{
-		CacheTTL: 600,
-	}
+	new := AuthPlugger{}
 	// cfg := httpserver.GetConfig(c)
 	// var err error
 
@@ -192,21 +185,6 @@ func NewAuthPlugger(c *caddy.Controller) (*AuthPlugger, error) {
 		switch c.Val() {
 		case "allow_reading_parent_paths":
 			new.ReadParentPath = true
-		case "cache_ttl":
-			// require argument
-			if !c.NextArg() {
-				return nil, c.ArgErr()
-			}
-			// parse integer
-			i, err := strconv.ParseInt(c.Val(), 10, 64)
-			if err != nil {
-				return nil, c.ArgErr()
-			}
-			// set to zero if negative
-			if i < 0 {
-				i = 0
-			}
-			new.CacheTTL = i
 		case "remove_prefix":
 			// require argument
 			if !c.NextArg() {

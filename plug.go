@@ -8,15 +8,15 @@ import (
 )
 
 type Plug interface {
-	GetUserPermit(r *http.Request) (*Permit, bool, error)
+	GetUsername(r *http.Request) (username string, authSuccess bool, err error)
+	GetPermit(username string) (*Permit, error)
 	GetDefaultPermit() (*Permit, error)
 	GetPublicPermit() (*Permit, error)
-	LoginResponder() LoginResponder
+	Login(w http.ResponseWriter, r *http.Request, realm string) (bool, int, error)
 	Name() string
 }
 
 type PlugFactory func(c *caddy.Controller) (Plug, error)
-type LoginResponder func(w http.ResponseWriter, r *http.Request, realm string) (int, error)
 
 var (
 	plugFactories     map[string]PlugFactory

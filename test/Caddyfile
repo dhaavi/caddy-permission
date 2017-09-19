@@ -1,16 +1,38 @@
 localhost
 
 browse
-tls off
+
+tls certs/server.crt certs/server.key {
+  # clients request certs/clientCA.crt
+}
 
 authplugger realm AuthPlugger
-authplugger basicauth {
+
+authplugger tls {
+  setbasicauth admin admin
+  setcookie token secret
+  setcookie language en
+}
+
+authplugger basic {
   user admin admin
   rw /system/
 
-  *
+  user greg
   rw /tmp/
 
-  !
+  * # or "default"
   ro /
+
+  public # or "public"
+  ro /public/
+}
+
+authplugger api {
+  name MyWebsite
+  user http://localhost/authplugger/api
+  permit http://localhost/authplugger/api/{{username}}
+  login http://localhost/login
+  cache 600
+  cleanup 3600
 }
