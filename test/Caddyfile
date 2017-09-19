@@ -1,0 +1,16 @@
+localhost
+
+browse
+tls off
+
+authplugger realm AuthPlugger
+authplugger basicauth {
+  user admin admin
+  rw /system/
+
+  *
+  rw /tmp/
+
+  !
+  ro /
+}
