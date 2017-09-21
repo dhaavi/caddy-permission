@@ -22,3 +22,4 @@ func MethodIsRo(method string) bool {
 // special methods:
 // MOVE: check DELETE on source and PUT on dest
 // COPY: check GET on source and PUT on dest
+// WEBSOCKET: check if Upgrade Header is present

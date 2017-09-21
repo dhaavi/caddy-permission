@@ -3,12 +3,14 @@ package authplugger
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 )
 
+// AuthPlugger is an authentication plug middleware
 type AuthPlugger struct {
 	Next httpserver.Handler
 
@@ -29,12 +31,8 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 	var username string
 	var userSource string
 
-	var permit *Permit
-
 	var authSuccess bool
 	var err error
-
-	ro := MethodIsRo(r.Method)
 
 	// First get username
 	for _, plug := range plugger.Plugs {
@@ -56,6 +54,62 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 
 	}
 
+	var allowed bool
+	var plug Plug
+
+	switch r.Method {
+	// handle MOVE
+	case "MOVE":
+		allowed, plug = plugger.CheckPermits(username, "DELETE", r.RequestURI, false)
+		if allowed {
+			location := r.Header.Get("Location")
+			if location != "" {
+				allowed, plug = plugger.CheckPermits(username, "PUT", location, false)
+			}
+		}
+	// handle COPY
+	case "COPY":
+		allowed, plug = plugger.CheckPermits(username, "GET", r.RequestURI, false)
+		if allowed {
+			location := r.Header.Get("Location")
+			if location != "" {
+				allowed, plug = plugger.CheckPermits(username, "PUT", location, false)
+			}
+		}
+	default:
+		// handle websocket upgrades
+		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+			allowed, plug = plugger.CheckPermits(username, "WEBSOCKET", r.RequestURI, false)
+			// handle everything else
+		} else {
+			ro := MethodIsRo(r.Method)
+			allowed, plug = plugger.CheckPermits(username, r.Method, r.RequestURI, ro)
+		}
+	}
+
+	if allowed {
+		return plugger.Forward(w, r, username, userSource, plug, USER_PERMIT)
+	}
+
+	// Execute login procedure, if available
+	if username == "" {
+		for _, plug := range plugger.Plugs {
+			ok, code, err := plug.Login(w, r, plugger.Realm)
+			if ok {
+				return code, err
+			}
+		}
+	}
+
+	return Forbidden(w, r, username, userSource, nil, NO_PERMIT)
+}
+
+// CheckPermits checks permissions of a request
+func (plugger *AuthPlugger) CheckPermits(username, method, path string, ro bool) (bool, Plug) {
+
+	var permit *Permit
+	var err error
+
 	// Then get user/default permits
 	if username != "" {
 
@@ -69,8 +123,8 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 			if permit == nil {
 				continue
 			}
-			if permit.Check(plugger, r.Method, r.RequestURI, ro) {
-				return plugger.Forward(w, r, username, userSource, plug, USER_PERMIT)
+			if permit.Check(plugger, method, path, ro) {
+				return true, plug
 			}
 
 			permit, err = plug.GetDefaultPermit()
@@ -79,8 +133,8 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 				continue
 			}
 			if permit != nil {
-				if permit.Check(plugger, r.Method, r.RequestURI, ro) {
-					return plugger.Forward(w, r, username, userSource, plug, DEFAULT_PERMIT)
+				if permit.Check(plugger, method, path, ro) {
+					return true, plug
 				}
 			}
 
@@ -99,23 +153,14 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 		if permit == nil {
 			continue
 		}
-		if permit.Check(plugger, r.Method, r.RequestURI, ro) {
-			return plugger.Forward(w, r, username, userSource, plug, PUBLIC_PERMIT)
+		if permit.Check(plugger, method, path, ro) {
+			return true, plug
 		}
 
 	}
 
-	// Execute login procedure, if available
-	if username == "" {
-		for _, plug := range plugger.Plugs {
-			ok, code, err := plug.Login(w, r, plugger.Realm)
-			if ok {
-				return code, err
-			}
-		}
-	}
+	return false, nil
 
-	return Forbidden(w, r, username, userSource, nil, NO_PERMIT)
 }
 
 func getUserForPrinting(username, userSource string) string {
@@ -139,6 +184,7 @@ func getPermitPlugForPrinting(plug Plug, permitType uint8) string {
 	}
 }
 
+// Forward hands the request to the next middleware and adds some headers for information
 func (plugger *AuthPlugger) Forward(w http.ResponseWriter, r *http.Request, username, userSource string, plug Plug, permitType uint8) (int, error) {
 
 	// log
@@ -163,6 +209,7 @@ func (plugger *AuthPlugger) Forward(w http.ResponseWriter, r *http.Request, user
 	return plugger.Next.ServeHTTP(w, r)
 }
 
+// Forbidden logs why this request was forbidden and returns http.StatusForbidden
 func Forbidden(w http.ResponseWriter, r *http.Request, username, userSource string, plug Plug, permitType uint8) (int, error) {
 
 	// log
@@ -171,6 +218,7 @@ func Forbidden(w http.ResponseWriter, r *http.Request, username, userSource stri
 	return http.StatusForbidden, nil
 }
 
+// NewAuthPlugger creates a new AuthPlugger from configuration
 func NewAuthPlugger(c *caddy.Controller) (*AuthPlugger, error) {
 
 	new := AuthPlugger{}
