@@ -39,7 +39,7 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 
 		username, authSuccess, err = plug.GetUsername(r)
 		if err != nil {
-			fmt.Printf("[authplugger] failed to get username from %s: %s", plug.Name(), err)
+			fmt.Printf("[authplugger] failed to get user from %s: %s\n", plug.Name(), err)
 			username = ""
 			continue
 		}
@@ -75,6 +75,20 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 			if location != "" {
 				allowed, plug = plugger.CheckPermits(username, "PUT", location, false)
 			}
+		}
+	case "PATCH":
+		dest := r.Header.Get("Destination")
+		if dest != "" {
+			if strings.ToLower(r.Header.Get("Action")) == "copy" {
+				allowed, plug = plugger.CheckPermits(username, "GET", r.RequestURI, false)
+			} else {
+				allowed, plug = plugger.CheckPermits(username, "DELETE", r.RequestURI, false)
+			}
+			if allowed {
+				allowed, plug = plugger.CheckPermits(username, "PUT", dest, false)
+			}
+		} else {
+			allowed, plug = plugger.CheckPermits(username, r.Method, r.RequestURI, false)
 		}
 	default:
 		// handle websocket upgrades
@@ -117,7 +131,7 @@ func (plugger *AuthPlugger) CheckPermits(username, method, path string, ro bool)
 
 			permit, err = plug.GetPermit(username)
 			if err != nil {
-				fmt.Printf("[authplugger] failed to get user permit from %s: %s", plug.Name(), err)
+				fmt.Printf("[authplugger] failed to get user permit from %s: %s\n", plug.Name(), err)
 				continue
 			}
 			if permit == nil {
@@ -129,7 +143,7 @@ func (plugger *AuthPlugger) CheckPermits(username, method, path string, ro bool)
 
 			permit, err = plug.GetDefaultPermit()
 			if err != nil {
-				fmt.Printf("[authplugger] failed to get default permit from %s: %s", plug.Name(), err)
+				fmt.Printf("[authplugger] failed to get default permit from %s: %s\n", plug.Name(), err)
 				continue
 			}
 			if permit != nil {
@@ -147,7 +161,7 @@ func (plugger *AuthPlugger) CheckPermits(username, method, path string, ro bool)
 
 		permit, err := plug.GetPublicPermit()
 		if err != nil {
-			fmt.Printf("[authplugger] failed to get public permit from %s: %s", plug.Name(), err)
+			fmt.Printf("[authplugger] failed to get public permit from %s: %s\n", plug.Name(), err)
 			continue
 		}
 		if permit == nil {

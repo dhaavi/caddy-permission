@@ -45,6 +45,15 @@ func NewPermission(methods, path string) (*Permission, error) {
 		Path: path,
 	}
 
+	if methods == blacklistChar {
+		return &new, nil
+	}
+
+	if methods == "any" {
+		new.MethodsAreBlacklist = true
+		return &new, nil
+	}
+
 	if strings.HasPrefix(methods, blacklistChar) {
 		new.MethodsAreBlacklist = true
 		methods = strings.TrimLeft(methods, blacklistChar)

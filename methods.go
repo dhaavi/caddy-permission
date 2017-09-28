@@ -23,3 +23,7 @@ func MethodIsRo(method string) bool {
 // MOVE: check DELETE on source and PUT on dest
 // COPY: check GET on source and PUT on dest
 // WEBSOCKET: check if Upgrade Header is present
+// PATCH: treated as special if "Destination" Header is present:
+//   like COPY if Header "Action: copy" is present, else
+//   like MOVE
+//   (this behaviour was observed in https://github.com/hacdias/filemanager)

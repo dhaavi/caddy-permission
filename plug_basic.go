@@ -75,6 +75,7 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 		case "user", "*", "!", "default", "public":
 			// save previous permit if exists
 			if nextPermit != nil {
+				nextPermit.Finalize()
 				switch username {
 				case "*":
 					new.DefaultPermit = nextPermit
@@ -123,6 +124,7 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 
 	// save last permit if exists
 	if nextPermit != nil {
+		nextPermit.Finalize()
 		switch username {
 		case "*":
 			new.DefaultPermit = nextPermit

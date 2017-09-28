@@ -7,6 +7,7 @@ tls certs/server.crt certs/server.key {
 }
 
 authplugger realm AuthPlugger
+authplugger allow_reading_parent_paths
 
 authplugger tls {
   setbasicauth admin admin
@@ -14,25 +15,42 @@ authplugger tls {
   setcookie language en
 }
 
-authplugger basic {
-  user admin admin
-  rw /system/
-
-  user greg
-  rw /tmp/
-
-  * # or "default"
-  ro /
-
-  public # or "public"
-  ro /public/
-}
-
 authplugger api {
   name MyWebsite
-  user http://localhost/authplugger/api
-  permit http://localhost/authplugger/api/{{username}}
-  login http://localhost/login
+  user http://localhost:8080/caddyapi
+  permit http://localhost:8080/caddyapi/{{username}}
+  login http://localhost:8080/login?next={{resource}}
+  add_prefix /api/resource /files
+  add_no_prefix
   cache 600
   cleanup 3600
+}
+
+authplugger basic {
+  # user greg
+  # rw /tmp/
+
+  # * # or "default"
+  # rw /api/users/0
+
+  public # or "public"
+  ro /static
+  ro /sw.js
+  ro /api/auth/renew
+  rw /api/users/0
+}
+
+filemanager / {
+  # database            /db/filemanager
+  no_auth
+  locale              de
+  allow_commands      false
+  allow_edit          true
+  allow_new           true
+  allow_publish       false
+  css                 fm.css
+}
+
+webdav /webdav {
+  modify      true
 }

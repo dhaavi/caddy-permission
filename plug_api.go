@@ -2,7 +2,9 @@ package authplugger
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,6 +27,9 @@ type ApiAuthPlug struct {
 	PermitURL string
 
 	LoginURL string
+
+	AddPrefixes []string
+	AddNoPrefix bool
 
 	CacheTime int64
 	Cleanup   int64
@@ -136,6 +141,12 @@ func NewApiAuthPlug(c *caddy.Controller) (Plug, error) {
 				return nil, c.ArgErr()
 			}
 			new.LoginURL = c.Val()
+		case "add_prefix":
+			for c.NextArg() {
+				new.AddPrefixes = append(new.AddPrefixes, c.Val())
+			}
+		case "add_no_prefix":
+			new.AddNoPrefix = true
 		case "cache", "cleanup":
 			option := c.Val()
 			// require argument
@@ -176,11 +187,6 @@ type Response struct {
 	Permissions map[string]string
 }
 
-var (
-	errUserRequest   = "authplugger (%s) failed to get user: %s"
-	errPermitRequest = "authplugger (%s) failed to get permit: %s"
-)
-
 func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 
 	client := &http.Client{
@@ -188,7 +194,7 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 	}
 	apiRequest, err := http.NewRequest("GET", plug.UserURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf(errUserRequest, plug.Name(), err)
+		return nil, err
 	}
 
 	// Add source of original request
@@ -211,21 +217,23 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 
 	resp, err := client.Do(apiRequest)
 	if err != nil {
-		return nil, fmt.Errorf(errUserRequest, plug.Name(), err)
+		return nil, err
 	}
 
 	switch resp.StatusCode {
 	case 200:
 
-		apiResponse := Response{}
-		var content []byte
-		_, err := resp.Body.Read(content)
+		apiResponse := &Response{}
+		// var content []byte
+		// _, err := resp.Body.Read(content)
+		content, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf(errUserRequest, plug.Name(), fmt.Sprintf("could not read response: %s", err))
+			return nil, fmt.Errorf("could not read response: %s", err)
 		}
+		fmt.Println(string(content))
 		err = json.Unmarshal(content, apiResponse)
 		if err != nil {
-			return nil, fmt.Errorf(errUserRequest, plug.Name(), fmt.Sprintf("could not unpack response: %s", err))
+			return nil, fmt.Errorf("could not unpack response: %s", err)
 		}
 
 		// process username
@@ -243,18 +251,15 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 			plug.Users[apiResponse.Cookie] = user
 			plug.Lock.Unlock()
 		default:
-			return nil, fmt.Errorf(errUserRequest, plug.Name(), "invalid response: missing either \"BasicAuth\" or \"Cookie\" for user identification")
+			return nil, errors.New("invalid response: missing either \"BasicAuth\" or \"Cookie\" for user identification")
 		}
 
 		// process optional permit
 
 		if len(apiResponse.Permissions) > 0 {
-			new := NewPermit(plug.CacheTime)
-			for path, methods := range apiResponse.Permissions {
-				err := new.AddPermission(methods, path)
-				if err != nil {
-					return nil, fmt.Errorf(errUserRequest, plug.Name(), fmt.Sprintf("could not parse permission: %s", err))
-				}
+			new, err := plug.CreatePermit(apiResponse)
+			if err != nil {
+				return nil, err
 			}
 
 			plug.Lock.Lock()
@@ -267,10 +272,10 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 	case 404, 403:
 		return nil, nil
 	case 500:
-		return nil, fmt.Errorf(errUserRequest, plug.Name(), "server error")
+		return nil, errors.New("server error")
 	}
 
-	return nil, fmt.Errorf(errUserRequest, plug.Name(), fmt.Sprintf("unexpected status code: %d", resp.StatusCode))
+	return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 }
 
 func (plug *ApiAuthPlug) ApiPermRequest(username string) (*Permit, error) {
@@ -279,31 +284,27 @@ func (plug *ApiAuthPlug) ApiPermRequest(username string) (*Permit, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf(errPermitRequest, plug.Name(), err)
+		return nil, err
 	}
 
 	switch resp.StatusCode {
 	case 200:
 
-		apiResponse := Response{}
+		apiResponse := &Response{}
 		var content []byte
 		_, err := resp.Body.Read(content)
 		if err != nil {
-			return nil, fmt.Errorf(errPermitRequest, plug.Name(), fmt.Sprintf("could not read response: %s", err))
+			return nil, fmt.Errorf("could not read response: %s", err)
 		}
 		err = json.Unmarshal(content, apiResponse)
 		if err != nil {
-			return nil, fmt.Errorf(errPermitRequest, plug.Name(), fmt.Sprintf("could not unpack response: %s", err))
+			return nil, fmt.Errorf("could not unpack response: %s", err)
 		}
 
 		// process permit
-
-		new := NewPermit(plug.CacheTime)
-		for path, methods := range apiResponse.Permissions {
-			err := new.AddPermission(methods, path)
-			if err != nil {
-				return nil, fmt.Errorf(errPermitRequest, plug.Name(), fmt.Sprintf("could not parse permission: %s", err))
-			}
+		new, err := plug.CreatePermit(apiResponse)
+		if err != nil {
+			return nil, err
 		}
 
 		plug.Lock.Lock()
@@ -334,10 +335,10 @@ func (plug *ApiAuthPlug) ApiPermRequest(username string) (*Permit, error) {
 		return new, nil
 
 	case 500:
-		return nil, fmt.Errorf(errPermitRequest, plug.Name(), "server error")
+		return nil, errors.New("server error")
 	}
 
-	return nil, fmt.Errorf(errPermitRequest, plug.Name(), fmt.Sprintf("unexpected status code: %d", resp.StatusCode))
+	return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 }
 
 // Cleaner periodically cleans up the ApiAuthPlug
@@ -364,4 +365,32 @@ func (plug *ApiAuthPlug) Cleaner() {
 
 		plug.Lock.Unlock()
 	}
+}
+
+func (plug *ApiAuthPlug) CreatePermit(apiResponse *Response) (*Permit, error) {
+
+	new := NewPermit(plug.CacheTime)
+	for path, methods := range apiResponse.Permissions {
+
+		if len(plug.AddPrefixes) == 0 || plug.AddNoPrefix {
+			err := new.AddPermission(methods, path)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse permission: %s", err)
+			}
+		}
+
+		if len(plug.AddPrefixes) > 0 {
+			for _, prefix := range plug.AddPrefixes {
+				err := new.AddPermission(methods, prefix+path)
+				if err != nil {
+					return nil, fmt.Errorf("could not parse permission: %s", err)
+				}
+			}
+		}
+
+	}
+	new.Finalize()
+
+	return new, nil
+
 }

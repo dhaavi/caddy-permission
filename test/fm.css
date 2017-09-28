@@ -1,0 +1,21 @@
+#search {
+  display: none;
+}
+
+/*#switch-view-button {
+  display: none;
+}*/
+
+button[aria-label=Share] {
+  display: none;
+}
+
+img[alt="File Manager"] {
+  display: block;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  background: url(https://www.egb.at/static/icons/apple-icon-180x180.png) no-repeat;
+  width: 40px; /* Width of new image */
+  height: 40px; /* Height of new image */
+  padding-left: 40px; /* Equal to width of new image */
+}
