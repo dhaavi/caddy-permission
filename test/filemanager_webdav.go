@@ -1,5 +1,5 @@
-// This file is forked from the caddy project: https://github.com/mholt/caddy/blob/74316fe01bbb78e5383bb79c8f546d8615a36a75/caddy/caddymain/run.go
-// LICENSE for this file: https://github.com/mholt/caddy/blob/74316fe01bbb78e5383bb79c8f546d8615a36a75/LICENSE.txt
+// This file is forked from the caddy project: https://raw.githubusercontent.com/mholt/caddy/v0.10.9/caddy/caddymain/run.go
+// LICENSE for this file: https://raw.githubusercontent.com/mholt/caddy/v0.10.9/LICENSE.txt
 
 package main
 
@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/xenolf/lego/acme"
 
@@ -36,13 +38,13 @@ func init() {
 	setVersion()
 
 	flag.BoolVar(&caddytls.Agreed, "agree", false, "Agree to the CA's Subscriber Agreement")
-	flag.StringVar(&caddytls.DefaultCAUrl, "ca", "https://acme-v01.api.example.com/directory", "URL to certificate authority's ACME server directory")
+	flag.StringVar(&caddytls.DefaultCAUrl, "ca", "https://acme-v01.api.letsencrypt.org/directory", "URL to certificate authority's ACME server directory")
 	flag.BoolVar(&caddytls.DisableHTTPChallenge, "disable-http-challenge", caddytls.DisableHTTPChallenge, "Disable the ACME HTTP challenge")
 	flag.BoolVar(&caddytls.DisableTLSSNIChallenge, "disable-tls-sni-challenge", caddytls.DisableTLSSNIChallenge, "Disable the ACME TLS-SNI challenge")
 	flag.StringVar(&conf, "conf", "", "Caddyfile to load (default \""+caddy.DefaultConfigFile+"\")")
 	flag.StringVar(&cpu, "cpu", "100%", "CPU cap")
 	flag.BoolVar(&plugins, "plugins", false, "List installed plugins")
-	flag.StringVar(&caddytls.DefaultEmail, "email", "email@example.com", "Default ACME CA account email address")
+	flag.StringVar(&caddytls.DefaultEmail, "email", "", "Default ACME CA account email address")
 	flag.DurationVar(&acme.HTTPClient.Timeout, "catimeout", acme.HTTPClient.Timeout, "Default ACME CA HTTP timeout")
 	flag.StringVar(&logfile, "log", "", "Process log file")
 	flag.StringVar(&caddy.PidFile, "pidfile", "", "Path to write pid file")
@@ -56,7 +58,6 @@ func init() {
 	caddy.SetDefaultCaddyfileLoader("default", caddy.LoaderFunc(defaultLoader))
 }
 
-// Run is Caddy's main() function.
 func main() {
 	flag.Parse()
 
@@ -66,12 +67,19 @@ func main() {
 
 	// Set up process log before anything bad happens
 	switch logfile {
+	case "stdout":
+		log.SetOutput(os.Stdout)
 	case "stderr":
 		log.SetOutput(os.Stderr)
 	case "":
 		log.SetOutput(ioutil.Discard)
 	default:
-		log.SetOutput(os.Stdout)
+		log.SetOutput(&lumberjack.Logger{
+			Filename:   logfile,
+			MaxSize:    100,
+			MaxAge:     14,
+			MaxBackups: 10,
+		})
 	}
 
 	// Check for one-time actions
