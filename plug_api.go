@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -198,12 +199,20 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 	}
 
 	// Add source of original request
-	apiRequest.Header.Add("X-Real-IP", r.RemoteAddr)
-	apiRequest.Header.Add("X-Forwarded-For", r.RemoteAddr)
+
+	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	apiRequest.Host = r.Host
+	apiRequest.Header.Set("Host", r.Host)
+	apiRequest.Header.Set("X-Real-IP", remoteIP)
+	apiRequest.Header.Set("X-Forwarded-For", remoteIP)
 	if r.TLS != nil {
-		apiRequest.Header.Add("X-Forwarded-Proto", "https")
+		apiRequest.Header.Set("X-Forwarded-Proto", "https")
 	} else {
-		apiRequest.Header.Add("X-Forwarded-Proto", "http")
+		apiRequest.Header.Set("X-Forwarded-Proto", "http")
 	}
 
 	// Add basicauth and cookies
