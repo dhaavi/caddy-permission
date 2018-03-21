@@ -8,7 +8,8 @@ __Important Note: Authplugger has not yet reached a stable release, bugs may com
 
 As authplugger is not (yet) an official plugin of caddy, so you will have to build it yourself.
 
-You can either put together your own `main.go` file, or use `simple.go` in the `test` directory.
+You can either put together your own `main.go` file, or use `simple.go` in the `test` directory.  
+To build a caddy server just with authplugger as a plugin (and no others), go into the `test` directory and execute `go build simple.go`, the resulting file `simple` is your binary.
 
 As there is currently (at the time of development) no way to log via Caddy, Authplugger will just print it's log lines.
 
