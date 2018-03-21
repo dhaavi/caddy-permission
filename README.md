@@ -2,7 +2,7 @@
 
 This plugin allows the user to provide generic authentication based on HTTP methods. It's main use case is to add (SSO) authentication to unsupported web services.
 
-__Important Note: Authplugger has not yet reached a stable release, bugs may come and eat you.__ I already use it in production, so at least part of it seems to work very well ;)
+__Important Note: Authplugger has not yet reached a stable release, bugs may come and eat you.__ I already use it in production, so at least part of it seems to work very well - other parts may be incomplete ;)
 
 ## Building
 
@@ -15,12 +15,14 @@ As there is currently (at the time of development) no way to log via Caddy, Auth
 
 ## Usage
 
-Authplugger works by filtering HTTP Methods. The most common ones are included in the shortcuts _readonly_ `ro`, _read/write_ `rw`, _websockets_ `ws` and _any_ for all of the most common:
+Authplugger works by filtering HTTP methods and request paths. The most common methods are included in the shortcuts _readonly_ `ro`, _read/write_ `rw`, _websockets_ `ws` and _any_ for all of the most common:
 
 - `ro`: GET, HEAD, PROPFIND, OPTIONS, LOCK, UNLOCK
 - `rw`: GET, HEAD, PROPFIND, OPTIONS, LOCK, UNLOCK, POST, PUT, DELETE, MKCOL, PROPPATCH
 - `ws`: WEBSOCKET
 - `any`: GET, HEAD, PROPFIND, OPTIONS, LOCK, UNLOCK, POST, PUT, DELETE, MKCOL, PROPPATCH, WEBSOCKET
+
+Authplugger works on a prefix basis. Every path provided to Authplugger matches the exact path and every path that starts with the provided path.
 
 __Important Note: Authplugger is only secure if you can verify if the application you want to protect is compatible with Authplugger,__ meaning that it must conform to these standard HTTP methods to interact with the web service. Also, Authplugger can only deny websocket connections, but __cannot__ filter within them. If using Authplugger, you should always treat websocket as a full write access action.
 
@@ -57,6 +59,50 @@ Authplugger currently supports 3 different backends:
       cleanup 3600 # when to clean out authenticated users
     }
 
+__`user` Endpoint:__
+
+Authplugger creates a request to the configure URL with:
+
+- The original `Host` Header.
+- The originating IP in the `X-Real-IP` Header.
+- The originating IP in the `X-Forwarded-For` Header.
+- The original protocol (`http` or `https`) in the `X-Forwarded-For` Header.
+- The original BasicAuth credentials, if present.
+- All cookies.
+
+It expects a JSON Object in return with the following fields:
+
+    {
+      "BasicAuth":   false,
+      "Cookie":      "cookieName=cookieValue",
+      "Username":    "username",
+      "Permissions": {}
+    }
+
+`BasicAuth` or `Cookie` are used to tell Authplugger how to identify this user in the future. Either set `BasicAuth` to true, or set `Cookie` to the authentication cookie.
+
+Example:
+
+    {
+      "BasicAuth":   false,
+      "Cookie":      "PHPSESSID=12345",
+      "Username":    "tom",
+      "Permissions": {
+        "/tmp/": "rw",
+        "/static": "ro",
+        "/other": "GET,HEAD"
+      }
+    }
+
+__`permit` Endpoint:__
+
+Works very similar to the `user` endpoint, but instead of forwarding all these headers and cookies, the username is replaced in the URL.
+
+__`login` Endpoint:__
+
+If current permissions are insufficient to complete a request and the user is not yet authenticated, he is redirected to this URL.
+
+
 ### HTTP Basic Auth
 
     authplugger basic {
@@ -71,6 +117,7 @@ Authplugger currently supports 3 different backends:
       ro /sw.js
       ro /api/auth/renew
       rw /api/users/0
+      GET,HEAD /other
     }
 
 ### TLS Auth
