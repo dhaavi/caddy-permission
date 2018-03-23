@@ -17,12 +17,15 @@ func TestConfigParsing(t *testing.T) {
 	}{
 		{
 			`
-			authplugger cache_ttl 300
 			authplugger remove_prefix /files
 			authplugger allow_reading_parent_paths
-			authplugger basicauth {
+			authplugger basic {
 				user admin asdfasdf
-				rw /
+				rw /secret/
+				rw /internal/
+
+				*
+				ro /internal/
 
 				!
 				ro /
