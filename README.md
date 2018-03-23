@@ -22,6 +22,10 @@ Authplugger works by filtering HTTP methods and request paths. The most common m
 - `ws`: WEBSOCKET
 - `any`: GET, HEAD, PROPFIND, OPTIONS, LOCK, UNLOCK, POST, PUT, DELETE, MKCOL, PROPPATCH, WEBSOCKET
 
+If you want to specify your methods yourseld, be sure to not have any spaces between them: `GET,HEAD,...`.
+
+If you prepend the list of methods with `~`, you can _invert_ their meaning, effectively turning the whitelist into a blacklist.
+
 Authplugger works on a prefix basis. Every path provided to Authplugger matches the exact path and every path that starts with the provided path.
 
 __Important Note: Authplugger is only secure if you can verify if the application you want to protect is compatible with Authplugger,__ meaning that it must conform to these standard HTTP methods to interact with the web service. Also, Authplugger can only deny websocket connections, but __cannot__ filter within them. If using Authplugger, you should always treat websocket as a full write access action.
@@ -129,6 +133,16 @@ This plugin requires TLS client authentication. It simply sets the CN to the use
       setcookie token secret # set cookie on forwarded request
       setcookie language en
     }
+
+## Combining Backends
+
+When combining different backends, the backend defined earlier is always asked first. This handled as follows:
+
+- Try to authenticate the user with every backend, stop if successful.
+- If authenticated:
+  - Check the user's permissions and default permissions for every backend, stop if allowed.
+- Check the public permit for every backend, stop if allowed.
+- Let the first backend to support login handle login.
 
 ## Other Options
 

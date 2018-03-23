@@ -9,6 +9,7 @@ var (
 	}
 )
 
+// MethodIsRo returns whether the supplied method is a "read only" method.
 func MethodIsRo(method string) bool {
 	switch method {
 	case "GET", "HEAD", "PROPFIND", "OPTIONS":

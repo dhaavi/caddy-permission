@@ -9,6 +9,11 @@ import (
 	"github.com/mholt/caddy"
 )
 
+const (
+	permitUserIdentifier = "user"
+)
+
+// BasicAuthPlug is an Authplugger plug that uses HTTP Basic Authentication and static users and rules.
 type BasicAuthPlug struct {
 	Users         map[string]string
 	Permits       map[string]*Permit
@@ -16,7 +21,8 @@ type BasicAuthPlug struct {
 	PublicPermit  *Permit
 }
 
-func (plug *BasicAuthPlug) GetUsername(r *http.Request) (string, bool, error) {
+// GetUsername authenticates and returns a username, if successful.
+func (plug *BasicAuthPlug) GetUsername(r *http.Request) (username string, authSuccess bool, err error) {
 	token := r.Header.Get("Authorization")
 	token = strings.TrimPrefix(token, "Basic ")
 	username, ok := plug.Users[token]
@@ -26,6 +32,7 @@ func (plug *BasicAuthPlug) GetUsername(r *http.Request) (string, bool, error) {
 	return "", false, nil
 }
 
+// GetPermit returns the user permit of a user.
 func (plug *BasicAuthPlug) GetPermit(username string) (*Permit, error) {
 	permit, ok := plug.Permits[username]
 	if ok {
@@ -34,14 +41,17 @@ func (plug *BasicAuthPlug) GetPermit(username string) (*Permit, error) {
 	return nil, nil
 }
 
+// GetDefaultPermit returns the default permit.
 func (plug *BasicAuthPlug) GetDefaultPermit() (*Permit, error) {
 	return plug.DefaultPermit, nil
 }
 
+// GetPublicPermit returns the public permit.
 func (plug *BasicAuthPlug) GetPublicPermit() (*Permit, error) {
 	return plug.PublicPermit, nil
 }
 
+// Login returns "401 Authentication Required"
 func (plug *BasicAuthPlug) Login(w http.ResponseWriter, r *http.Request, realm string) (bool, int, error) {
 	if realm == "" {
 		realm = "Restricted"
@@ -50,14 +60,16 @@ func (plug *BasicAuthPlug) Login(w http.ResponseWriter, r *http.Request, realm s
 	return true, http.StatusUnauthorized, nil
 }
 
+// Name returns the name of the plug.
 func (plug *BasicAuthPlug) Name() string {
-	return "basic"
+	return BackendBasicName
 }
 
 func init() {
-	RegisterPlug("basic", NewBasicAuthPlug)
+	RegisterPlug(BackendBasicName, NewBasicAuthPlug)
 }
 
+// NewBasicAuthPlug create a new BasicAuthPlug.
 func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 
 	new := BasicAuthPlug{
@@ -72,14 +84,14 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 	// we start right after the plugin keyword
 	for c.NextBlock() {
 		switch c.Val() {
-		case "user", "*", "!", "default", "public":
+		case permitUserIdentifier, DefaultShort, DefaultLong, PublicShort, PublicLong:
 			// save previous permit if exists
 			if nextPermit != nil {
 				nextPermit.Finalize()
 				switch username {
-				case "*":
+				case DefaultShort, DefaultLong:
 					new.DefaultPermit = nextPermit
-				case "!":
+				case PublicShort, PublicLong:
 					new.PublicPermit = nextPermit
 				default:
 					new.Permits[username] = nextPermit
@@ -92,7 +104,7 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 			nextPermit = NewPermit(0)
 			switch c.Val() {
 			// add username, compile password
-			case "user":
+			case permitUserIdentifier:
 				args := c.RemainingArgs()
 				switch len(args) {
 				case 1:
@@ -104,10 +116,10 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 				default:
 					return nil, c.ArgErr()
 				}
-			case "*", "default":
-				username = "*"
-			case "!", "public":
-				username = "!"
+			case DefaultShort, DefaultLong:
+				username = DefaultShort
+			case PublicShort, PublicLong:
+				username = PublicShort
 			}
 		default:
 			// add permission
@@ -126,9 +138,9 @@ func NewBasicAuthPlug(c *caddy.Controller) (Plug, error) {
 	if nextPermit != nil {
 		nextPermit.Finalize()
 		switch username {
-		case "*":
+		case DefaultShort, DefaultLong:
 			new.DefaultPermit = nextPermit
-		case "!":
+		case PublicShort, PublicLong:
 			new.PublicPermit = nextPermit
 		default:
 			new.Permits[username] = nextPermit

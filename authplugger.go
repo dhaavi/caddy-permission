@@ -102,7 +102,7 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 	}
 
 	if allowed {
-		return plugger.Forward(w, r, username, userSource, plug, USER_PERMIT)
+		return plugger.Forward(w, r, username, userSource, plug, PermitTypeUser)
 	}
 
 	// Execute login procedure, if available
@@ -115,7 +115,7 @@ func (plugger *AuthPlugger) ServeHTTP(w http.ResponseWriter, r *http.Request) (i
 		}
 	}
 
-	return Forbidden(w, r, username, userSource, nil, NO_PERMIT)
+	return Forbidden(w, r, username, userSource, nil, PermitTypeNo)
 }
 
 // CheckPermits checks permissions of a request
@@ -189,9 +189,9 @@ func getPermitPlugForPrinting(plug Plug, permitType uint8) string {
 		return ""
 	}
 	switch permitType {
-	case DEFAULT_PERMIT:
+	case PermitTypeDefault:
 		return fmt.Sprintf("*%s ", plug.Name())
-	case PUBLIC_PERMIT:
+	case PermitTypePublic:
 		return fmt.Sprintf("!%s ", plug.Name())
 	default:
 		return fmt.Sprintf("%s ", plug.Name())

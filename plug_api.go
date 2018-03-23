@@ -15,7 +15,8 @@ import (
 	"github.com/mholt/caddy"
 )
 
-type ApiAuthPlug struct {
+// APIAuthPlug authenticates users and gets permits through an API.
+type APIAuthPlug struct {
 	CustomName string
 
 	Lock          sync.RWMutex
@@ -36,7 +37,8 @@ type ApiAuthPlug struct {
 	Cleanup   int64
 }
 
-func (plug *ApiAuthPlug) GetUsername(r *http.Request) (username string, ok bool, err error) {
+// GetUsername authenticates and returns a username, if successful.
+func (plug *APIAuthPlug) GetUsername(r *http.Request) (username string, ok bool, err error) {
 
 	var user *User
 
@@ -57,7 +59,7 @@ func (plug *ApiAuthPlug) GetUsername(r *http.Request) (username string, ok bool,
 		return
 	}
 
-	user, err = plug.ApiUserRequest(r)
+	user, err = plug.APIUserRequest(r)
 	if user != nil {
 		ok = true
 	}
@@ -65,7 +67,8 @@ func (plug *ApiAuthPlug) GetUsername(r *http.Request) (username string, ok bool,
 
 }
 
-func (plug *ApiAuthPlug) GetPermit(username string) (permit *Permit, err error) {
+// GetPermit returns the user permit of a user.
+func (plug *APIAuthPlug) GetPermit(username string) (permit *Permit, err error) {
 
 	var ok bool
 
@@ -78,38 +81,43 @@ func (plug *ApiAuthPlug) GetPermit(username string) (permit *Permit, err error) 
 		return
 	}
 
-	return plug.ApiPermRequest(username)
+	return plug.APIPermRequest(username)
 
 }
 
-func (plug *ApiAuthPlug) GetDefaultPermit() (*Permit, error) {
+// GetDefaultPermit returns the default permit.
+func (plug *APIAuthPlug) GetDefaultPermit() (*Permit, error) {
 	return plug.DefaultPermit, nil
 }
 
-func (plug *ApiAuthPlug) GetPublicPermit() (*Permit, error) {
+// GetPublicPermit returns the public permit.
+func (plug *APIAuthPlug) GetPublicPermit() (*Permit, error) {
 	return plug.PublicPermit, nil
 }
 
-func (plug *ApiAuthPlug) Login(w http.ResponseWriter, r *http.Request, realm string) (bool, int, error) {
+// Login redirects to the configured login URL.
+func (plug *APIAuthPlug) Login(w http.ResponseWriter, r *http.Request, realm string) (bool, int, error) {
 	url := strings.Replace(plug.LoginURL, "{{resource}}", r.RequestURI, -1)
 	http.Redirect(w, r, url, 302)
 	return true, 0, nil
 }
 
-func (plug *ApiAuthPlug) Name() string {
+// Name returns the name of the plug.
+func (plug *APIAuthPlug) Name() string {
 	if plug.CustomName != "" {
-		return "api:" + plug.CustomName
+		return fmt.Sprintf("%s: %s", BackendAPIName, plug.CustomName)
 	}
-	return "api"
+	return BackendAPIName
 }
 
 func init() {
-	RegisterPlug("api", NewApiAuthPlug)
+	RegisterPlug(BackendAPIName, NewAPIAuthPlug)
 }
 
-func NewApiAuthPlug(c *caddy.Controller) (Plug, error) {
+// NewAPIAuthPlug create a new APIAuthPlug.
+func NewAPIAuthPlug(c *caddy.Controller) (Plug, error) {
 
-	new := ApiAuthPlug{
+	new := APIAuthPlug{
 		Users:     make(map[string]*User),
 		Permits:   make(map[string]*Permit),
 		CacheTime: 600,
@@ -181,6 +189,7 @@ func NewApiAuthPlug(c *caddy.Controller) (Plug, error) {
 
 }
 
+// Response is a respone to an API request.
 type Response struct {
 	BasicAuth   bool
 	Cookie      string
@@ -188,7 +197,8 @@ type Response struct {
 	Permissions map[string]string
 }
 
-func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
+// APIUserRequest handles authentication via API.
+func (plug *APIAuthPlug) APIUserRequest(r *http.Request) (*User, error) {
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
@@ -287,7 +297,8 @@ func (plug *ApiAuthPlug) ApiUserRequest(r *http.Request) (*User, error) {
 	return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 }
 
-func (plug *ApiAuthPlug) ApiPermRequest(username string) (*Permit, error) {
+// APIPermRequest gets the Permit of an already authenticated user via API.
+func (plug *APIAuthPlug) APIPermRequest(username string) (*Permit, error) {
 
 	url := strings.Replace(plug.PermitURL, "{{username}}", username, -1)
 
@@ -350,9 +361,9 @@ func (plug *ApiAuthPlug) ApiPermRequest(username string) (*Permit, error) {
 	return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 }
 
-// Cleaner periodically cleans up the ApiAuthPlug
+// Cleaner periodically cleans up the APIAuthPlug
 // This consists of deleting all timed-out users and permits.
-func (plug *ApiAuthPlug) Cleaner() {
+func (plug *APIAuthPlug) Cleaner() {
 	c := time.Tick(time.Duration(plug.Cleanup * 1000000000))
 	for now := range c {
 		nowUnix := now.Unix()
@@ -376,7 +387,8 @@ func (plug *ApiAuthPlug) Cleaner() {
 	}
 }
 
-func (plug *ApiAuthPlug) CreatePermit(apiResponse *Response) (*Permit, error) {
+// CreatePermit creates a new permit according to the configuration.
+func (plug *APIAuthPlug) CreatePermit(apiResponse *Response) (*Permit, error) {
 
 	new := NewPermit(plug.CacheTime)
 	for path, methods := range apiResponse.Permissions {

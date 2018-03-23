@@ -7,6 +7,7 @@ import (
 	"github.com/mholt/caddy"
 )
 
+// Plug is an interface for adding plugins to authplugger
 type Plug interface {
 	GetUsername(r *http.Request) (username string, authSuccess bool, err error)
 	GetPermit(username string) (*Permit, error)
@@ -16,6 +17,7 @@ type Plug interface {
 	Name() string
 }
 
+// PlugFactory creates a plug
 type PlugFactory func(c *caddy.Controller) (Plug, error)
 
 var (
@@ -27,12 +29,14 @@ func init() {
 	plugFactories = make(map[string]PlugFactory)
 }
 
+// RegisterPlug registers an Authplugger plug for use
 func RegisterPlug(name string, plugFactory PlugFactory) {
 	plugFactoriesLock.Lock()
 	defer plugFactoriesLock.Unlock()
 	plugFactories[name] = plugFactory
 }
 
+// GetFactory returns the factory for the given plug name
 func GetFactory(name string) PlugFactory {
 	plugFactoriesLock.RLock()
 	defer plugFactoriesLock.RUnlock()

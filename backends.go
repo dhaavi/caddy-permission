@@ -1,9 +1,17 @@
 package authplugger
 
+// Backend constants
 const (
 	BackendBasic uint8 = iota
-	BackendApi
+	BackendAPI
+	BackendTLS
 
 	BackendBasicName = "basic"
-	BackendApiName   = "api"
+	BackendAPIName   = "api"
+	BackendTLSName   = "tls"
+
+	DefaultShort = "*"
+	DefaultLong  = "default"
+	PublicShort  = "!"
+	PublicLong   = "public"
 )
