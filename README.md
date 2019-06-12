@@ -64,64 +64,63 @@ This plugin requires TLS client authentication. It simply sets the CN to the use
 
     permission tls
 
+### API Auth
 
-    ### API Auth
+This is a custom API, that you can implement in your existing system - it's extremely simple. Here is how you would configure it within caddy:
 
-    This is a custom API, that you can implement in your existing system - it's extremely simple. Here is how you would configure it within caddy:
+    permission api {
+      name MyWebsite # name of website
+      user http://localhost:8080/caddyapi # main authentication api
+      permit http://localhost:8080/caddyapi/{{username}} # refetch a permit of a user
+      login http://localhost:8080/login?next={{resource}} # redirect here for logging in (resource is original URL)
+      add_prefix /api/resource /files # add prefixes to returned paths
+      add_without_prefix # if add_prefix is used, but you still want to also add the original paths
+      cache 600 # how to long to cache authenticated users
+      cleanup 3600 # when to clean out authenticated users
+    }
 
-        permission api {
-          name MyWebsite # name of website
-          user http://localhost:8080/caddyapi # main authentication api
-          permit http://localhost:8080/caddyapi/{{username}} # refetch a permit of a user
-          login http://localhost:8080/login?next={{resource}} # redirect here for logging in (resource is original URL)
-          add_prefix /api/resource /files # add prefixes to returned paths
-          add_without_prefix # if add_prefix is used, but you still want to also add the original paths
-          cache 600 # how to long to cache authenticated users
-          cleanup 3600 # when to clean out authenticated users
-        }
+__`user` Endpoint:__
 
-    __`user` Endpoint:__
+The Permission plugin creates a request user authentication at the configured URL with:
 
-    The Permission plugin creates a request user authentication at the configured URL with:
+- The original `Host` Header.
+- The originating IP in the `X-Real-IP` Header.
+- The originating IP in the `X-Forwarded-For` Header.
+- The original protocol (`http` or `https`) in the `X-Forwarded-For` Header.
+- The original BasicAuth credentials, if present.
+- All cookies.
 
-    - The original `Host` Header.
-    - The originating IP in the `X-Real-IP` Header.
-    - The originating IP in the `X-Forwarded-For` Header.
-    - The original protocol (`http` or `https`) in the `X-Forwarded-For` Header.
-    - The original BasicAuth credentials, if present.
-    - All cookies.
+It expects a JSON Object in return with the following fields:
 
-    It expects a JSON Object in return with the following fields:
+    {
+      "BasicAuth":   false,
+      "Cookie":      "cookieName=cookieValue",
+      "Username":    "username",
+      "Permissions": {}
+    }
 
-        {
-          "BasicAuth":   false,
-          "Cookie":      "cookieName=cookieValue",
-          "Username":    "username",
-          "Permissions": {}
-        }
+`BasicAuth` or `Cookie` are used to declare how to identify this user in the future. Either set `BasicAuth` to true, or set `Cookie` to the authenticating cookie.
 
-    `BasicAuth` or `Cookie` are used to declare how to identify this user in the future. Either set `BasicAuth` to true, or set `Cookie` to the authenticating cookie.
+Example:
 
-    Example:
+    {
+      "BasicAuth":   false,
+      "Cookie":      "PHPSESSID=12345",
+      "Username":    "tom",
+      "Permissions": {
+        "/tmp/": "rw",
+        "/static": "ro",
+        "/other": "GET,HEAD"
+      }
+    }
 
-        {
-          "BasicAuth":   false,
-          "Cookie":      "PHPSESSID=12345",
-          "Username":    "tom",
-          "Permissions": {
-            "/tmp/": "rw",
-            "/static": "ro",
-            "/other": "GET,HEAD"
-          }
-        }
+__`permit` Endpoint:__
 
-    __`permit` Endpoint:__
+Works very similar to the `user` endpoint, but instead of forwarding all these headers and cookies, the username is replaced in the URL.
 
-    Works very similar to the `user` endpoint, but instead of forwarding all these headers and cookies, the username is replaced in the URL.
+__`login` Endpoint:__
 
-    __`login` Endpoint:__
-
-    If current permissions are insufficient to complete a request and the user is not yet authenticated, she is redirected to this URL.
+If current permissions are insufficient to complete a request and the user is not yet authenticated, she is redirected to this URL.
 
 ## Combining Backends
 
