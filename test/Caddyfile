@@ -3,54 +3,37 @@ localhost
 browse
 
 tls certs/server.crt certs/server.key {
-  # clients request certs/clientCA.crt
+  clients request certs/clientCA.crt
 }
 
-authplugger realm AuthPlugger
-authplugger allow_reading_parent_paths
+permission realm "Protected Website"
+permission allow_reading_parent_paths
+permission set_basicauth user pass
+permission set_cookie token secret
 
-authplugger tls {
-  setbasicauth admin admin
-  setcookie token secret
-  setcookie language en
-}
+permission tls
 
-authplugger api {
+permission api {
   name MyWebsite
   user http://localhost:8080/caddyapi
   permit http://localhost:8080/caddyapi/{{username}}
   login http://localhost:8080/login?next={{resource}}
   add_prefix /api/resource /files
-  add_no_prefix
+  add_without_prefix
   cache 600
   cleanup 3600
 }
 
-authplugger basic {
-  # user greg
-  # rw /tmp/
+permission basic {
+  user greg
+  rw /tmp/
 
-  # * # or "default"
-  # rw /api/users/0
+  user george password
+  rw /admin/
 
-  public # or "public"
+  default
+  rw /shared/
+
+  public
   ro /static
-  ro /sw.js
-  ro /api/auth/renew
-  rw /api/users/0
-}
-
-filemanager / {
-  # database            /db/filemanager
-  no_auth
-  locale              de
-  allow_commands      false
-  allow_edit          true
-  allow_new           true
-  allow_publish       false
-  css                 fm.css
-}
-
-webdav /webdav {
-  modify      true
 }

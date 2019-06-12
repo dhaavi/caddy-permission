@@ -1,18 +1,17 @@
-package authplugger
+package permission
 
 var (
 	aliases = map[string][]string{
-		"ro":  []string{"GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK"},
-		"rw":  []string{"GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "POST", "PUT", "DELETE", "MKCOL", "PROPPATCH"},
-		"ws":  []string{"WEBSOCKET"},
-		"any": []string{"GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "POST", "PUT", "DELETE", "MKCOL", "PROPPATCH", "WEBSOCKET"},
+		"ro": []string{"GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK"},
+		"rw": []string{"GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "POST", "PUT", "DELETE", "MKCOL", "PROPPATCH"},
+		"ws": []string{"WEBSOCKET"},
 	}
 )
 
 // MethodIsRo returns whether the supplied method is a "read only" method.
 func MethodIsRo(method string) bool {
 	switch method {
-	case "GET", "HEAD", "PROPFIND", "OPTIONS":
+	case "GET", "HEAD", "PROPFIND", "OPTIONS", "LOCK", "UNLOCK":
 		return true
 	}
 	return false

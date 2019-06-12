@@ -1,4 +1,4 @@
-package authplugger
+package permission
 
 import (
 	"time"

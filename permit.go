@@ -1,7 +1,6 @@
-package authplugger
+package permission
 
 import (
-	"sort"
 	"time"
 )
 
@@ -15,52 +14,56 @@ const (
 
 // Permit holds permissions and their expiration time.
 type Permit struct {
-	Permissions []*Permission
-	ValidUntil  int64
+	Rules      []*Rule
+	ValidUntil int64
 }
 
 func (p Permit) Len() int {
-	return len(p.Permissions)
+	return len(p.Rules)
 }
 
 func (p Permit) Less(i, j int) bool {
-	return len(p.Permissions[i].Path) > len(p.Permissions[j].Path)
+	return len(p.Rules[i].Path) > len(p.Rules[j].Path)
 }
 
 func (p Permit) Swap(i, j int) {
-	p.Permissions[i], p.Permissions[j] = p.Permissions[j], p.Permissions[i]
+	p.Rules[i], p.Rules[j] = p.Rules[j], p.Rules[i]
 }
 
 // Check checks a request against this permission object.
-func (p Permit) Check(ap *AuthPlugger, method, path string, ro bool) bool {
-	for _, perm := range p.Permissions {
-		if perm.MatchesPath(path) {
-			return perm.MatchesMethod(method)
-		} else if ro && ap.ReadParentPath && perm.MatchesParentPath(path) {
-			return true
+func (p *Permit) Check(handler *Handler, method, path string, ro bool) (allowed bool, matched bool) {
+	for _, rule := range p.Rules {
+		if rule.MatchesPath(path) {
+			return rule.MatchesMethod(method), true
+		} else if ro && handler.ReadParentPath && rule.MatchesParentPath(path) {
+			return true, true
 		}
 	}
-	return false
+	return false, false
 }
 
 // NewPermit creates an empty Permit with the correct cache time.
-func NewPermit(cacheTime int64) *Permit {
+func NewPermit(cacheTime int64, now int64) *Permit {
+	if now == 0 {
+		now = time.Now().Unix()
+	}
+
 	return &Permit{
-		ValidUntil: time.Now().Unix() + cacheTime,
+		ValidUntil: now + cacheTime,
 	}
 }
 
-// AddPermission adds a permission to the Permit.
-func (p *Permit) AddPermission(methods, path string) error {
-	new, err := NewPermission(methods, path)
+// AddRule adds a permission to the Permit.
+func (p *Permit) AddRule(methods, path string) error {
+	new, err := NewRule(methods, path)
 	if err != nil {
 		return err
 	}
-	p.Permissions = append(p.Permissions, new)
+	p.Rules = append(p.Rules, new)
 	return nil
 }
 
-// Finalize sort the permissions and must be called when all permissions were added to the Permit.
+// Finalize does some final preparing/optimizing on the Permit.
 func (p *Permit) Finalize() {
-	sort.Sort(*p)
+	// nothing to do here anymore, preserving for future use.
 }

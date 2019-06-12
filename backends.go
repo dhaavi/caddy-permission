@@ -1,4 +1,4 @@
-package authplugger
+package permission
 
 // Backend constants
 const (
@@ -10,8 +10,6 @@ const (
 	BackendAPIName   = "api"
 	BackendTLSName   = "tls"
 
-	DefaultShort = "*"
-	DefaultLong  = "default"
-	PublicShort  = "!"
-	PublicLong   = "public"
+	DefaultIdentifier = "default"
+	PublicIdentifier  = "public"
 )
