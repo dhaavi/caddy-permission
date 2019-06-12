@@ -1,9 +1,8 @@
-module github.com/dhaavi/caddy-authplugger
+module github.com/dhaavi/caddy-permission
 
 go 1.12
 
 require (
-	github.com/dhaavi/caddy-permission v0.0.0-20190612102424-a9014c9945e3
 	github.com/google/uuid v1.1.1
 	github.com/klauspost/cpuid v1.2.1
 	github.com/mholt/caddy v1.0.0
