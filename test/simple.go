@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package caddymain
+package main
 
 import (
 	"bufio"
@@ -35,6 +35,7 @@ import (
 	"github.com/mholt/caddy/caddyfile"
 	"github.com/mholt/caddy/caddytls"
 	"github.com/mholt/caddy/telemetry"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 	"github.com/mholt/certmagic"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 
@@ -44,7 +45,7 @@ import (
 )
 
 func init() {
-	httpserver.RegisterDevDirective("authplugger", "basicauth")
+	httpserver.RegisterDevDirective("permission", "basicauth")
 
 	caddy.TrapSignals()
 
@@ -77,8 +78,7 @@ func init() {
 	caddy.SetDefaultCaddyfileLoader("default", caddy.LoaderFunc(defaultLoader))
 }
 
-// Run is Caddy's main() function.
-func Run() {
+func main() {
 	flag.Parse()
 
 	module := getBuildModule()
