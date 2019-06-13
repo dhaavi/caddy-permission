@@ -3,9 +3,11 @@ package permission
 import "flag"
 
 var (
-	debugPermissionPlugin bool
+	printDebug bool
+	printError bool
 )
 
 func init() {
-	flag.BoolVar(&debugPermissionPlugin, "debug-permission-plugin", false, "Enable debug logging for the permission plugin")
+	flag.BoolVar(&printDebug, "debug-permission", false, "Enable debug messages (to stdout) for the permission plugin")
+	flag.BoolVar(&printError, "error-permission", false, "Enable error messages (to stdout) for the permission plugin")
 }

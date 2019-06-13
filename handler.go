@@ -39,7 +39,9 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, 
 
 		username, authSuccess, err = backend.GetUsername(r)
 		if err != nil {
-			fmt.Printf("[permission] failed to get user from %s: %s\n", backend.Name(), err)
+			if printError || printDebug {
+				fmt.Printf("[permission] failed to get user from %s: %s\n", backend.Name(), err)
+			}
 			username = ""
 			continue
 		}
@@ -135,7 +137,9 @@ func (handler *Handler) CheckPermits(username, method, path string, ro bool) (bo
 
 			permit, err = backend.GetPermit(username)
 			if err != nil {
-				fmt.Printf("[permission] failed to get user permit from %s: %s\n", backend.Name(), err)
+				if printError || printDebug {
+					fmt.Printf("[permission] failed to get user permit from %s: %s\n", backend.Name(), err)
+				}
 				continue
 			}
 			if permit == nil {
@@ -148,7 +152,9 @@ func (handler *Handler) CheckPermits(username, method, path string, ro bool) (bo
 
 			permit, err = backend.GetDefaultPermit()
 			if err != nil {
-				fmt.Printf("[permission] failed to get default permit from %s: %s\n", backend.Name(), err)
+				if printError || printDebug {
+					fmt.Printf("[permission] failed to get default permit from %s: %s\n", backend.Name(), err)
+				}
 				continue
 			}
 			if permit != nil {
@@ -166,7 +172,9 @@ func (handler *Handler) CheckPermits(username, method, path string, ro bool) (bo
 
 		permit, err := backend.GetPublicPermit()
 		if err != nil {
-			fmt.Printf("[permission] failed to get public permit from %s: %s\n", backend.Name(), err)
+			if printError || printDebug {
+				fmt.Printf("[permission] failed to get public permit from %s: %s\n", backend.Name(), err)
+			}
 			continue
 		}
 		if permit == nil {
@@ -208,7 +216,7 @@ func (handler *Handler) Forward(w http.ResponseWriter, r *http.Request, username
 
 	// log
 	printablePermit := getPermitBackendForPrinting(backend, permitType)
-	if debugPermissionPlugin {
+	if printDebug {
 		fmt.Printf("[permission] %s%sgranted access: %s %s\n", getUserForPrinting(username, userSource), printablePermit, r.Method, r.RequestURI)
 	}
 
@@ -246,7 +254,7 @@ func (handler *Handler) Forward(w http.ResponseWriter, r *http.Request, username
 
 // Forbidden logs why this request was forbidden and returns http.StatusForbidden
 func Forbidden(w http.ResponseWriter, r *http.Request, username, userSource string, backend Backend, permitType uint8) (int, error) {
-	if debugPermissionPlugin {
+	if printDebug {
 		fmt.Printf("[permission] %s%sdenied access: %s %s\n", getUserForPrinting(username, userSource), getPermitBackendForPrinting(backend, permitType), r.Method, r.RequestURI)
 	}
 	return http.StatusForbidden, fmt.Errorf("[permission] %s%sdenied access: %s %s", getUserForPrinting(username, userSource), getPermitBackendForPrinting(backend, permitType), r.Method, r.RequestURI)
