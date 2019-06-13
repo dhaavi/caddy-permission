@@ -149,3 +149,14 @@ There are also a couple other options regardless of backend:
     permission allow_reading_parent_paths # applies read rights to parent paths
     set_basicauth username password # set basic auth on forwarded request
     set_cookie name value # set cookie on forwarded request, may be used multiple times
+
+## Cmdline options
+
+- `-debug-permission` enables debug and error messages (to stdout)
+- `-error-permission` enables error messages (to stdout)
+
+These will give you messages like this:
+
+    [permission] failed to get user from api:MyWebsite: Get http://localhost:8080/caddyapi: dial tcp 127.0.0.1:8080: connect: connection refused
+    [permission] failed to get user permit from api:MyWebsite: Get http://localhost:8080/caddyapi/greg: dial tcp 127.0.0.1:8080: connect: connection refused
+    [permission] [tls: greg] basic granted access: GET /tmp/
