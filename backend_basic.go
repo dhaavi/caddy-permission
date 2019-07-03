@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 const (

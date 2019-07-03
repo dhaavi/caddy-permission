@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 // Backend is an interface for adding backend plugins

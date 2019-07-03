@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 // APIBackend authenticates users and gets permits through an API.

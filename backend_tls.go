@@ -3,7 +3,7 @@ package permission
 import (
 	"net/http"
 
-	"github.com/mholt/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 // TLSBackend uses TLS client certificates for authentication.

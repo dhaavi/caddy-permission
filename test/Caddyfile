@@ -2,9 +2,9 @@ localhost
 
 browse
 
-tls certs/server.crt certs/server.key {
-  clients request certs/clientCA.crt
-}
+# tls certs/server.crt certs/server.key {
+#   clients request certs/clientCA.crt
+# }
 
 permission realm "Protected Website"
 permission allow_reading_parent_paths
